@@ -1,9 +1,10 @@
 import json
 import boto3
 import io
-import zipfile
-import time
+import mimetypes
 import os
+import time
+import zipfile
 
 # avoid:
 # botocore.errorfactory.ResourceConflictException:
@@ -108,10 +109,11 @@ def deploy_api_gateway(api_gateway_json):
     api_gateway.create_deployment(
         restApiId=rest_api_id,
         stageName='dev',
-    #    stageDescription='string',
-    #    description='string',
+        #stageDescription='string',
+        #description='string',
     )
-deploy_api_gateway(api_gateway_json)
+if paths:
+    deploy_api_gateway(api_gateway_json)
 
 def create_lambda(client, lambda_name, lambda_file, api_source_arn):
     iam_role = "midway_lambda" # TODO customize this
@@ -143,12 +145,15 @@ def create_lambda(client, lambda_name, lambda_file, api_source_arn):
         )
     if args.force_updates:
         statement_id = f'{lambda_name}-policy'
-        client.remove_permission(
-            FunctionName=lambda_name,
-            StatementId=statement_id,
-            #Qualifier='string',
-            #RevisionId='string'
-        )
+        try:
+            client.remove_permission(
+                FunctionName=lambda_name,
+                StatementId=statement_id,
+                #Qualifier='string',
+                #RevisionId='string'
+            )
+        except client.exceptions.ResourceNotFoundException:
+            pass
         time.sleep(BLIND_CONFIG_WAIT_TIME)
         client.add_permission(
             FunctionName=lambda_name,
@@ -173,3 +178,31 @@ for path in paths:
         f"/*/{path['method'].upper()}{path['path']}"
     )
     create_lambda(lambda_client, path["lambda"], path["file"], api_source_arn)
+
+def deploy_s3_files():
+    s3 = boto3.client("s3")
+    home_page = ""
+    with open("s3_list.txt") as f:
+        for i, line in enumerate(f):
+            split_line = line.split()
+            if i == 0:
+                assert split_line[0] == "S3_BUCKET:"
+                bucket_name = split_line[1]
+            else:
+                if len(split_line) == 2:
+                    assert split_line[1] == "#HOMEPAGE"
+                    home_page = split_line[0]
+                else:
+                    assert len(split_line) == 1, split_line
+                file_name_to_upload = split_line[0]
+                s3.upload_file(
+                    file_name_to_upload, bucket_name, file_name_to_upload,
+                    ExtraArgs={
+                        "ACL":"public-read",
+                        "ContentType": mimetypes.guess_type(file_name_to_upload)[0]
+                    }
+                )
+
+    print(f"https://{bucket_name}.s3.us-east-2.amazonaws.com/{home_page}")
+
+#deploy_s3_files()
