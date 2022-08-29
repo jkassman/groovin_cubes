@@ -19,22 +19,6 @@ parser.add_argument('--force_updates', action="store_true")
 args = parser.parse_args()
 
 
-rest_api_id = "zllbrt4p87"
-api_name = "killerfrog-api-demo"
-
-api_gateway_json = {
-    "swagger": "2.0",
-    "info": {
-        "version": "2018-07-21T19:28:58Z", # TODO Investigate
-        "title": api_name
-    },
-    "host": f"{rest_api_id}.execute-api.us-east-2.amazonaws.com",
-    "basePath": "/dev",
-    "schemes": [
-        "https"
-    ],
-}
-
 invalid_file_top_message = (
 """file %s has an invalid file top!\n\n%s
 All python files should start with:
@@ -94,6 +78,34 @@ for path in paths:
             }
         }
     }
+
+# Get rest_api_id from paths
+api_gateway_names = set()
+for path in paths:
+    api_gateway_names.add(path["api_gateway"])
+if len(api_gateway_names) > 1:
+    raise Exception(
+        f"You specified multiple different API gateways, which is not yet supported!"
+        f" Gateways found: {api_gateway_names}"
+    )
+rest_api_id = api_gateway_names.pop()
+
+# TODO customize name as well
+api_name = "killerfrog-api-demo"
+
+api_gateway_json = {
+    "swagger": "2.0",
+    "info": {
+        "version": "2018-07-21T19:28:58Z", # TODO Investigate
+        "title": api_name
+    },
+    "host": f"{rest_api_id}.execute-api.us-east-2.amazonaws.com",
+    "basePath": "/dev",
+    "schemes": [
+        "https"
+    ],
+}
+
 api_gateway_json["paths"] = gateway_paths
 
 
