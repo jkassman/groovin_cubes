@@ -18,6 +18,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--force_updates', action="store_true")
 args = parser.parse_args()
 
+session = boto3.session.Session()
+aws_region = session.region_name
+aws_account_id = session.client("sts").get_caller_identity()["Account"]
+
 
 invalid_file_top_message = (
 """file %s has an invalid file top!\n\n%s
@@ -67,8 +71,8 @@ for path in paths:
             ],
             "x-amazon-apigateway-integration": {
                 "uri": (
-                    f"arn:aws:apigateway:us-east-2:lambda:path/2015-03-31/functions/"
-                    f"arn:aws:lambda:us-east-2:539164448633:function:"
+                    f"arn:aws:apigateway:{aws_region}:lambda:path/2015-03-31/functions/"
+                    f"arn:aws:lambda:{aws_region}:{aws_account_id}:function:"
                     f"{path['lambda']}/invocations"
                 ),
                 "passthroughBehavior": "when_no_match",
@@ -99,7 +103,7 @@ api_gateway_json = {
         "version": "2018-07-21T19:28:58Z", # TODO Investigate
         "title": api_name
     },
-    "host": f"{rest_api_id}.execute-api.us-east-2.amazonaws.com",
+    "host": f"{rest_api_id}.execute-api.{aws_region}.amazonaws.com",
     "basePath": "/dev",
     "schemes": [
         "https"
@@ -110,7 +114,7 @@ api_gateway_json["paths"] = gateway_paths
 
 
 def deploy_api_gateway(api_gateway_json):
-    api_gateway = boto3.client("apigateway")
+    api_gateway = session.client("apigateway")
     api_gateway.put_rest_api(
         restApiId=rest_api_id,
         mode='overwrite',
@@ -135,7 +139,7 @@ def create_lambda(client, lambda_name, lambda_file, api_source_arn):
 
     config = dict(
         FunctionName=lambda_name,
-        Role=f"arn:aws:iam::539164448633:role/{iam_role}",
+        Role=f"arn:aws:iam::{aws_account_id}:role/{iam_role}",
         Handler=f'{os.path.splitext(lambda_file)[0]}.lambda_handler',
         #Description='string',
         #Timeout=123,
@@ -182,17 +186,17 @@ def create_lambda(client, lambda_name, lambda_file, api_source_arn):
         )
 
 
-lambda_client = boto3.client("lambda")
+lambda_client = session.client("lambda")
 
 for path in paths:
     api_source_arn =  (
-        f"arn:aws:execute-api:us-east-2:539164448633:{rest_api_id}"
+        f"arn:aws:execute-api:{aws_region}:{aws_account_id}:{rest_api_id}"
         f"/*/{path['method'].upper()}{path['path']}"
     )
     create_lambda(lambda_client, path["lambda"], path["file"], api_source_arn)
 
 def deploy_s3_files():
-    s3 = boto3.client("s3")
+    s3 = session.client("s3")
     home_page = ""
     with open("s3_list.txt") as f:
         for i, line in enumerate(f):
@@ -215,6 +219,6 @@ def deploy_s3_files():
                     }
                 )
 
-    print(f"https://{bucket_name}.s3.us-east-2.amazonaws.com/{home_page}")
+    print(f"https://{bucket_name}.s3.{aws_region}.amazonaws.com/{home_page}")
 
 #deploy_s3_files()
