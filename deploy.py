@@ -64,7 +64,10 @@ print(json.dumps(paths, indent=4))
 gateway_paths = {}
 for path in paths:
     method = path["method"]
-    gateway_paths[path["path"]] = {
+    path_text = path["path"]
+    if path_text not in gateway_paths:
+        gateway_paths[path_text] = {}
+    gateway_paths[path_text].update({
         method.lower(): {
             "produces": [
                 "application/json"
@@ -81,7 +84,7 @@ for path in paths:
                 "type": "aws_proxy"
             }
         }
-    }
+    })
 
 # Get rest_api_id from paths
 api_gateway_names = set()
